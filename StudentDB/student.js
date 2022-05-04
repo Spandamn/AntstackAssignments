@@ -1,6 +1,7 @@
 const express = require('express');
 const app = express();
-const studentdb = {};
+const studentdb = {
+};
 let idNums = 0;
 const PORT = process.env.PORT || 5000;
 app.use(express.json());
@@ -21,30 +22,31 @@ app.get("/api/student/:studentid", async (req, res) => {
 });
 app.post("/api/student", (req, res) => {
     let id = ++idNums;
-    let data = res.body;
-    if (!('name' in data || 'currentClass' in data || 'Division' in data || id in studentdb)) {
+    let data = req.body;
+    if (!('name' in data || 'currentClass' in data || 'Division' in data)) {
         res.sendStatus(400);
     } else {
-        studentdb[`${id}`] = {...data};
-        studentdb[`${id}`].id = id;
-        console.log(id);
+        studentdb[`${id}`] = {...data, id};
+        res.send(studentdb[`${id}`]);
     }
 });
 app.put("/api/student/:studentid", (req, res) => {
     let id = req.params.studentid;
-    let data = res.body;
+    let data = req.body;
     if (!('name' in data || 'currentClass' in data || 'Division' in data || id in studentdb)) {
         res.sendStatus(400);
     } else {
-        studentdb[`${id}`] = {...data};
+        studentdb[`${id}`] = {...data, id};
+        res.send(studentdb[`${id}`]);
     }
 });
-app.put("/api/student/:studentid", (req, res) => {
+app.delete("/api/student/:studentid", (req, res) => {
     let id = req.params.studentid;
-    if (!(id in studentdb)) {
+    if (!((`${id}`) in studentdb)) {
         res.sendStatus(404);
     } else {
         delete studentdb[`${id}`];
+        res.send(`Deleted ${id}`);
     }
 });
 
