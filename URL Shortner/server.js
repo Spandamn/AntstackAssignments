@@ -1,10 +1,10 @@
 const express = require('express');
-const shortId = require('shortid');
 const app = express();
 const UrlDb = {};
+let urlnum = 1000;
 const addUrl = function (url) {
     if (UrlDb[url]) return UrlDb[url].shortLink;
-    let shortUrl = shortId.generate(url);
+    let shortUrl = urlnum++;
     UrlDb[url] = {
         shortLink: shortUrl,
         longLink: url
