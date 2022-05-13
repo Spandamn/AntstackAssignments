@@ -1,22 +1,23 @@
 const express = require('express');
 const app = express();
-const UrlDb = {};
+//const UrlDb = {};
 let urlnum = 1000;
+const awsConfig = require('../awsConfig.json');
+var aws = require('aws-sdk');
+aws.config.update(awsConfig);
+let docClient = new aws.DynamoDB.DocumentClient();
 const addUrl = function (url) {
-    if (UrlDb[url]) return UrlDb[url].shortLink;
     let shortUrl = urlnum++;
-    UrlDb[url] = {
-        shortLink: shortUrl,
-        longLink: url
-    };
+    docClient.put({"TableName": "urldb", Item: {"shortif": `${shortUrl}`, "longUrl": url}}, function (err, data) {
+        if (err) {
+            console.log("ERROR: " + JSON.stringify(err));
+        } else {
+            console.log(data); 
+        }
+    });
     return shortUrl;
 };
 const getLongUrl = function (url) {
-    let allUrls = Object.keys(UrlDb);
-    for (const i of allUrls) {
-        if (UrlDb[i].shortLink === url) return UrlDb[i].longLink;
-    }
-    return null;
 };
 const PORT = process.env.PORT || 5000;
 app.set('view engine', 'ejs');
@@ -26,14 +27,19 @@ app.get("/", (req, res) => {
 });
 app.get("/:shortUrl", async (req, res) => {
     let hook = req.params.shortUrl;
-    let longUrl = getLongUrl(hook);
-    console.log(hook);
-    console.log(longUrl);
-    if (longUrl) {
-        res.redirect(longUrl);
-    } else {
-        res.sendStatus(404);
-    }
+    docClient.get({TableName: "urldb", Key: {"shortif": hook}}, function (err, data) { // parseInt because in db, the id is a number
+        if (err) {
+            res.send("ERROR: " + JSON.stringify(err));
+        } else {
+            if (data.Item) {
+                console.log(data.Item.longUrl);
+                res.redirect(data.Item.longUrl);
+            } else {
+                console.log("URL Not Found");
+                res.sendStatus(404);
+            }
+        }
+    });
 });
 app.post("/shortUrls", (req, res) => {
     let fullUrl = req.body.fullUrl;
