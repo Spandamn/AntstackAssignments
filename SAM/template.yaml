@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  UrlShortnerGet:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: url_shortner/
+      Handler: getItem.handler
+      Runtime: nodejs16.x
+      Policies: AmazonDynamoDBFullAccess
+      Events:
+        ShortnerRest:
+          Type: Api
+          Properties:
+            Path: /{shortUrl}
+            Method: get
+  UrlShortnerPost:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: url_shortner/
+      Handler: putItem.handler
+      Runtime: nodejs16.x
+      Policies: AmazonDynamoDBFullAccess
+      Events:
+        ShortnerRest:
+          Type: Api
+          Properties:
+            Path: /shortUrls
+            Method: post
+  UrlDb:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: shortid
+        Type: String
+      AttributeDefinitions: 
+        - 
+          AttributeName: "longUrl"
+          AttributeType: "S"
