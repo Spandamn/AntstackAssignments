@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  S3FileUploadRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
+                - 'apigateway.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+  S3TriggerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: trigger.handler
+      Runtime: nodejs16.x
+      Events:
+        CreateFileEvent:
+          Type: S3
+          Properties:
+            Bucket: !Ref testbucketsp21
+            Events: s3:ObjectCreated:*
+  LambdaInvokePermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !GetAtt S3TriggerFunction.Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: 's3.amazonaws.com'
+      SourceAccount: !Sub ${AWS::AccountId}
+      SourceArn: !GetAtt testbucketsp21.Arn
+  S3FileUploadAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: S3 File Upload API
+      Description: API to upload files to S3
+      Body: 
+        swagger: "2.0"
+        info:
+          description: "API to upload files to S3"
+          version: "1.0"
+          title: "S3 File Upload API"
+        host: "${!Ref S3FileUploadAPI}.execute-api.us-east-1.amazonaws.com"
+        basePath: "/prod"
+        schemes:
+        - "https"
+        paths:
+          /{bucket}/{filename}:
+            put:
+              parameters:
+              - name: "filename"
+                in: "path"
+                required: true
+                type: "string"
+              - name: "bucket"
+                in: "path"
+                required: true
+                type: "string"
+              responses: {}
+              x-amazon-apigateway-integration:
+                credentials: !GetAtt S3FileUploadRole.Arn
+                httpMethod: "PUT"
+                uri: "arn:aws:apigateway:us-east-1:s3:path/{bucket}/{key}"
+                responses:
+                  default:
+                    statusCode: "200"
+                requestParameters:
+                  integration.request.path.key: "method.request.path.filename"
+                  integration.request.path.bucket: "method.request.path.bucket"
+                passthroughBehavior: "when_no_match"
+                type: "aws"
+        x-amazon-apigateway-binary-media-types:
+        - "application/json"
+        - "image/jpeg"
+
+  testbucketsp21:
+    Type: AWS::S3::Bucket

@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  S3FileUploadRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
+                - 'apigateway.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+
+  LambdaInvokePermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !GetAtt SendEmailFunction.Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: 's3.amazonaws.com'
+      SourceAccount: !Sub ${AWS::AccountId}
+      SourceArn: !GetAtt testbucketsp21.Arn
+
+  StepFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
+                - 'apigateway.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+
+  triggerStateMachineAPI:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      AccessLogSettings:
+        DestinationArn: !GetAtt SamAppLogGroup.Arn
+        Format: $context.requestId
+      DefinitionBody: 
+        openapi: "3.0.1"
+        info:
+          title: "triggerStepFunction"
+          version: "2022-08-01 13:00:44UTC"
+        paths:
+          /test:
+            put:
+              responses:
+                default:
+                  description: "Default response for PUT /test"
+              x-amazon-apigateway-integration:
+                integrationSubtype: "StepFunctions-StartExecution"
+                credentials: !GetAtt StepFunctionRole.Arn
+                requestParameters:
+                  StateMachineArn: !Ref EmailStateMachine
+                payloadFormatVersion: "1.0"
+                type: "aws_proxy"
+                connectionType: "INTERNET"
+        x-amazon-apigateway-importexport-version: "1.0"
+        x-amazon-apigateway-binary-media-types:
+        - "application/json"
+        - "image/jpeg"
+
+  SendEmailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: sendEmail.handler
+      Runtime: nodejs16.x
+      Policies: 
+        - AmazonSESFullAccess
+        - AmazonS3FullAccess
+
+  testbucketsp21:
+    Type: AWS::S3::Bucket
+
+  EmailStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Logging:
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt SamAppLogGroup.Arn
+        Level: ALL
+      Name: EmailStateMachine
+      Type: STANDARD
+      Definition:
+        Comment: "State Machine invokes lambda"
+        StartAt: "LambdaInvoke"
+        States: 
+          LambdaInvoke: 
+            Type: "Task"
+            Resource: "arn:aws:states:::lambda:invoke"
+            OutputPath: "$.Payload"
+            Parameters: 
+              "Payload.$": "$"
+              FunctionName: !GetAtt SendEmailFunction.Arn
+            End: true
+      Policies: 
+        - AWSLambdaRole
+        - CloudWatchLogsFullAccess
+
+  SamAppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: SamAppLogGroup
+      RetentionInDays: 1
